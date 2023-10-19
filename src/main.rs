@@ -20,9 +20,9 @@ fn main() {
 }
 
 fn handle_client(mut stream: std::net::TcpStream) {
-    println!("accepted new connection");
-    let mut buf = vec![];
-    stream.read(&mut buf).unwrap();
-    let respond = "HTTP/1.1 200 OK\r\n\r\n";
-    stream.write_all(respond.as_bytes()).unwrap();
+    let mut request = [0u8; 1024];
+    stream.read(&mut request).unwrap();
+
+    let respond = b"HTTP/1.1 200 OK\r\n\r\n";
+    stream.write_all(respond).unwrap();
 }
