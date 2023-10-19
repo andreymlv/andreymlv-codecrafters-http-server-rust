@@ -1,7 +1,7 @@
 use anyhow::Result;
 use nom::branch::alt;
 use nom::bytes::complete::take_till;
-use nom::character::complete::char;
+use nom::character::complete::{alpha0, alpha1, char};
 use nom::combinator::value;
 use nom::multi::many0;
 use nom::sequence::separated_pair;
@@ -55,7 +55,7 @@ fn handle_client(mut stream: std::net::TcpStream) -> Result<()> {
     let request = str::from_utf8(&request[..read])?;
     let (rest, _) = parse_method(&request).unwrap();
     let (_, path) = parse_path(&rest).unwrap();
-    if path.len() == 0 {
+    if path == "/" {
         let respond = b"HTTP/1.1 200 OK\r\n\r\n";
         stream.write_all(respond)?;
     } else {
@@ -72,13 +72,6 @@ fn parse_method(input: &str) -> IResult<&str, Method> {
     ))(input)
 }
 
-fn parse_segment(input: &str) -> IResult<&str, &str> {
-    take_till(|c| c == '/')(input)
-}
-
-fn parse_path(input: &str) -> IResult<&str, Vec<&str>> {
-    let (input, _) = char('/')(input)?;
-    let (input, segments) = many0(separated_pair(parse_segment, char('/'), parse_segment))(input)?;
-    let path_segments = segments.into_iter().map(|(seg, _)| seg).collect();
-    Ok((input, path_segments))
+fn parse_path(input: &str) -> IResult<&str, &str> {
+    take_till(|c| c == ' ')(input)
 }
