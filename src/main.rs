@@ -1,6 +1,6 @@
 use anyhow::Result;
 use nom::branch::alt;
-use nom::bytes::complete::take_till;
+use nom::bytes::complete::{take_till, take_until};
 use nom::character::complete::{alpha0, alpha1, char};
 use nom::combinator::value;
 use nom::multi::many0;
@@ -55,12 +55,19 @@ fn handle_client(mut stream: std::net::TcpStream) -> Result<()> {
     let request = str::from_utf8(&request[..read])?;
     let (rest, _) = parse_method(&request).unwrap();
     let (_, path) = parse_path(&rest).unwrap();
-    if path == "/" {
-        let respond = b"HTTP/1.1 200 OK\r\n\r\n";
-        stream.write_all(respond)?;
+    if path.starts_with("/echo/") {
+        let echo = &path[6..];
+        let len = echo.len();
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len}\r\n\r\n{echo}\r\n"
+        );
+        stream.write_all(response.as_bytes())?;
+    } else if path == "/" {
+        let response = b"HTTP/1.1 200 OK\r\n\r\n";
+        stream.write_all(response)?;
     } else {
-        let respond = b"HTTP/1.1 404 Not Found\r\n\r\n";
-        stream.write_all(respond)?;
+        let response = b"HTTP/1.1 404 Not Found\r\n\r\n";
+        stream.write_all(response)?;
     }
     Ok(())
 }
