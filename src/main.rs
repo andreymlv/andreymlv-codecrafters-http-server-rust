@@ -64,14 +64,14 @@ fn is_horizontal_space(c: u8) -> bool {
 }
 
 fn is_version(c: u8) -> bool {
-    c >= b'0' && c <= b'9' || c == b'.'
+    c.is_ascii_digit() || c == b'.'
 }
 
 fn line_ending(input: &[u8]) -> IResult<&[u8], &[u8]> {
     alt((tag("\r\n"), tag("\n")))(input)
 }
 
-fn request_line<'a>(input: &'a [u8]) -> IResult<&'a [u8], Request<'a>> {
+fn request_line(input: &[u8]) -> IResult<&[u8], Request<'_>> {
     let (input, method) = take_while1(is_token)(input)?;
     let (input, _) = take_while1(is_space)(input)?;
     let (input, url) = take_while1(is_not_space)(input)?;
@@ -100,7 +100,7 @@ fn message_header_value(input: &[u8]) -> IResult<&[u8], &[u8]> {
     )(input)
 }
 
-fn message_header<'a>(input: &'a [u8]) -> IResult<&'a [u8], Header<'a>> {
+fn message_header(input: &[u8]) -> IResult<&[u8], Header<'_>> {
     let (rest, name) = take_while1(is_token)(input)?;
     let (rest, _) = char(':')(rest)?;
     let (rest, values) = many1(message_header_value)(rest)?;
@@ -113,7 +113,7 @@ fn message_header<'a>(input: &'a [u8]) -> IResult<&'a [u8], Header<'a>> {
     ))
 }
 
-fn request<'a>(input: &'a [u8]) -> IResult<&'a [u8], (Request<'a>, Vec<Header<'a>>)> {
+fn request(input: &[u8]) -> IResult<&[u8], (Request<'_>, Vec<Header<'_>>)> {
     terminated(pair(request_line, many1(message_header)), line_ending)(input)
 }
 
@@ -151,7 +151,7 @@ async fn handle_client(mut stream: TcpStream) -> Result<()> {
     } else if path.starts_with("/user-agent") {
         for header in headers {
             if header.name == b"User-Agent" {
-                let agent = str::from_utf8(&header.value[0][..])?;
+                let agent = str::from_utf8(header.value[0])?;
                 let len = agent.len();
                 let response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len}\r\n\r\n{agent}");
                 stream.write_all(response.as_bytes()).await?;
