@@ -23,29 +23,7 @@ struct Header<'a> {
 }
 
 fn is_token(c: u8) -> bool {
-    match c {
-        128..=255 => false,
-        0..=31 => false,
-        b'(' => false,
-        b')' => false,
-        b'<' => false,
-        b'>' => false,
-        b'@' => false,
-        b',' => false,
-        b';' => false,
-        b':' => false,
-        b'\\' => false,
-        b'"' => false,
-        b'/' => false,
-        b'[' => false,
-        b']' => false,
-        b'?' => false,
-        b'=' => false,
-        b'{' => false,
-        b'}' => false,
-        b' ' => false,
-        _ => true,
-    }
+    !matches!(c, 128..=255 | 0..=31 | b'(' | b')' | b'<' | b'>' | b'@' | b',' | b';' | b':' | b'\\' | b'"' | b'/' | b'[' | b']' | b'?' | b'=' | b'{' | b'}' | b' ')
 }
 
 fn not_line_ending(c: u8) -> bool {
