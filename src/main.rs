@@ -151,7 +151,7 @@ fn handle_client(mut stream: std::net::TcpStream) -> Result<()> {
             "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len}\r\n\r\n{echo}"
         );
         stream.write_all(response.as_bytes())?;
-    } else if path.starts_with("/user-agent ") {
+    } else if path.starts_with("/user-agent") {
         for header in headers {
             if header.name == b"User-Agent" {
                 let agent = str::from_utf8(&header.value[0][..])?;
