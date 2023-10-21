@@ -1,17 +1,18 @@
-use anyhow::Result;
+use anyhow::{Error, Result};
 use nom::branch::alt;
 use nom::bytes::complete::take_while1;
 use nom::character::complete::char;
 use nom::multi::many1;
 use nom::sequence::{delimited, pair, preceded, terminated};
 use nom::{bytes::complete::tag, IResult};
+use std::env::args;
 use std::str;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
 #[derive(Debug)]
 struct Request<'a> {
-    _method: &'a [u8],
+    method: &'a [u8],
     uri: &'a [u8],
     _version: &'a [u8],
 }
@@ -59,7 +60,7 @@ fn request_line(input: &[u8]) -> IResult<&[u8], Request<'_>> {
     Ok((
         input,
         (Request {
-            _method: method,
+            method,
             uri: url,
             _version: version,
         }),
@@ -95,19 +96,38 @@ fn request(input: &[u8]) -> IResult<&[u8], (Request<'_>, Vec<Header<'_>>)> {
     terminated(pair(request_line, many1(message_header)), line_ending)(input)
 }
 
+#[derive(Debug, Clone)]
+struct Config {
+    directory: Option<String>,
+}
+
+async fn run(stream: TcpStream, config: Config) -> Result<(), Error> {
+    tokio::spawn(async move {
+        handle_client(stream, config).await.unwrap();
+    })
+    .await?;
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
+    let mut directory: Option<String> = None;
+    if args().len() > 1 {
+        if std::env::args().nth(1).expect("no pattern given") == "--derectory" {
+            directory = Some(args().nth(2).expect("no pattern given"));
+        } else {
+            panic!()
+        }
+    }
+    let config = Config { directory };
     let listener = TcpListener::bind("127.0.0.1:4221").await?;
     loop {
         let (stream, _) = listener.accept().await?;
-
-        tokio::spawn(async move {
-            handle_client(stream).await.unwrap();
-        });
+        tokio::spawn(run(stream, config.clone()));
     }
 }
 
-async fn handle_client(mut stream: TcpStream) -> Result<()> {
+async fn handle_client(mut stream: TcpStream, config: Config) -> Result<()> {
     let mut buffer = [0u8; 2048];
     let read = stream.read(&mut buffer).await?;
     if read >= buffer.len() {
@@ -119,28 +139,40 @@ async fn handle_client(mut stream: TcpStream) -> Result<()> {
     let (_, (request, headers)) = request(&buffer[..read])
         .unwrap_or((&buffer, (request_line(&buffer[..read]).unwrap().1, vec![])));
     let path = str::from_utf8(request.uri)?;
-    if path.starts_with("/echo/") {
-        let echo = path.strip_prefix("/echo/").unwrap();
-        let len = echo.len();
-        let response = format!(
+    if request.method == b"GET" {
+        if path.starts_with("/echo/") {
+            let echo = path.strip_prefix("/echo/").unwrap();
+            let len = echo.len();
+            let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len}\r\n\r\n{echo}"
         );
-        stream.write_all(response.as_bytes()).await?;
-    } else if path.starts_with("/user-agent") {
-        for header in headers {
-            if header.name == b"User-Agent" {
-                let agent = str::from_utf8(header.value[0])?;
-                let len = agent.len();
-                let response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len}\r\n\r\n{agent}");
-                stream.write_all(response.as_bytes()).await?;
+            stream.write_all(response.as_bytes()).await?;
+        } else if path.starts_with("/files/") {
+            let contents = tokio::fs::read_to_string(
+                config.directory.unwrap() + path.strip_prefix("/files").unwrap(),
+            )
+            .await?;
+            let len = contents.len();
+            let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {len}\r\n\r\n{contents}"
+        );
+            stream.write_all(response.as_bytes()).await?;
+        } else if path.starts_with("/user-agent") {
+            for header in headers {
+                if header.name == b"User-Agent" {
+                    let agent = str::from_utf8(header.value[0])?;
+                    let len = agent.len();
+                    let response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len}\r\n\r\n{agent}");
+                    stream.write_all(response.as_bytes()).await?;
+                }
             }
+        } else if path == "/" {
+            let response = b"HTTP/1.1 200 OK\r\n\r\n";
+            stream.write_all(response).await?;
+        } else {
+            let response = b"HTTP/1.1 404 Not Found\r\n\r\n";
+            stream.write_all(response).await?;
         }
-    } else if path == "/" {
-        let response = b"HTTP/1.1 200 OK\r\n\r\n";
-        stream.write_all(response).await?;
-    } else {
-        let response = b"HTTP/1.1 404 Not Found\r\n\r\n";
-        stream.write_all(response).await?;
     }
     Ok(())
 }
