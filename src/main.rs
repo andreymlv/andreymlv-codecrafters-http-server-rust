@@ -113,7 +113,7 @@ async fn run(stream: TcpStream, config: Config) -> Result<(), Error> {
 async fn main() -> Result<()> {
     let mut directory: Option<String> = None;
     if args().len() > 1 {
-        if std::env::args().nth(1).expect("no pattern given") == "--derectory" {
+        if std::env::args().nth(1).expect("no pattern given") == "--directory" {
             directory = Some(args().nth(2).expect("no pattern given"));
         } else {
             panic!()
