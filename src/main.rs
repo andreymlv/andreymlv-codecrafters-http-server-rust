@@ -5,18 +5,15 @@ use nom::character::complete::char;
 use nom::multi::many1;
 use nom::sequence::{delimited, pair, preceded, terminated};
 use nom::{bytes::complete::tag, IResult};
-use std::{
-    io::{Read, Write},
-    str,
-};
+use std::str;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
 #[derive(Debug)]
 struct Request<'a> {
-    method: &'a [u8],
+    _method: &'a [u8],
     uri: &'a [u8],
-    version: &'a [u8],
+    _version: &'a [u8],
 }
 
 #[derive(Debug)]
@@ -84,9 +81,9 @@ fn request_line<'a>(input: &'a [u8]) -> IResult<&'a [u8], Request<'a>> {
     Ok((
         input,
         (Request {
-            method,
+            _method: method,
             uri: url,
-            version,
+            _version: version,
         }),
     ))
 }
@@ -123,7 +120,6 @@ fn request<'a>(input: &'a [u8]) -> IResult<&'a [u8], (Request<'a>, Vec<Header<'a
 #[tokio::main]
 async fn main() -> Result<()> {
     let listener = TcpListener::bind("127.0.0.1:4221").await?;
-
     loop {
         let (stream, _) = listener.accept().await?;
 
