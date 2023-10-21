@@ -156,7 +156,7 @@ async fn handle_client(mut stream: TcpStream) -> Result<()> {
             if header.name == b"User-Agent" {
                 let agent = str::from_utf8(&header.value[0][..])?;
                 let len = agent.len();
-                let response = format!( "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len}\r\n\r\n{agent}");
+                let response = format!("HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len}\r\n\r\n{agent}");
                 stream.write_all(response.as_bytes()).await?;
             }
         }
