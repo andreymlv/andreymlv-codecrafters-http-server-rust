@@ -137,7 +137,7 @@ async fn handle_client(mut stream: TcpStream, config: Config) -> Result<()> {
             .await?;
         return Ok(());
     }
-    let (_, (request, headers)) = request(&buffer[..read])
+    let (body, (request, headers)) = request(&buffer[..read])
         .unwrap_or((&buffer, (request_line(&buffer[..read]).unwrap().1, vec![])));
     let path = str::from_utf8(request.uri)?;
     if request.method == b"GET" {
@@ -177,6 +177,14 @@ async fn handle_client(mut stream: TcpStream, config: Config) -> Result<()> {
         } else {
             let response = b"HTTP/1.1 404 Not Found\r\n\r\n";
             stream.write_all(response).await?;
+        }
+    } else if request.method == b"POST" {
+        if path.starts_with("/files/") {
+            let file = config.directory.unwrap() + path.strip_prefix("/files").unwrap();
+            let file_path = Path::new(&file);
+            tokio::fs::write(file_path, body).await?;
+            let response = format!("HTTP/1.1 201 Created\r\n\r\n");
+            stream.write_all(response.as_bytes()).await?;
         }
     }
     Ok(())
