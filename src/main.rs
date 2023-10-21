@@ -23,29 +23,7 @@ struct Header<'a> {
 }
 
 fn is_token(c: u8) -> bool {
-    match c {
-        128..=255 => false,
-        0..=31 => false,
-        b'(' => false,
-        b')' => false,
-        b'<' => false,
-        b'>' => false,
-        b'@' => false,
-        b',' => false,
-        b';' => false,
-        b':' => false,
-        b'\\' => false,
-        b'"' => false,
-        b'/' => false,
-        b'[' => false,
-        b']' => false,
-        b'?' => false,
-        b'=' => false,
-        b'{' => false,
-        b'}' => false,
-        b' ' => false,
-        _ => true,
-    }
+    matches!(c, 128..=255 | 0..=31 | b'(' | b')' | b'<' | b'>' | b'@' | b',' | b';' | b':' | b'\\' | b'"' | b'/' | b'[' | b']' | b'?' | b'=' | b'{' | b'}' | b' ')
 }
 
 fn not_line_ending(c: u8) -> bool {
@@ -142,7 +120,7 @@ async fn handle_client(mut stream: TcpStream) -> Result<()> {
         .unwrap_or((&buffer, (request_line(&buffer[..read]).unwrap().1, vec![])));
     let path = str::from_utf8(request.uri)?;
     if path.starts_with("/echo/") {
-        let echo = &path[6..];
+        let echo = path.strip_prefix("/echo/").unwrap();
         let len = echo.len();
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len}\r\n\r\n{echo}"
