@@ -7,9 +7,10 @@ use nom::sequence::{delimited, pair, preceded, terminated};
 use nom::{bytes::complete::tag, IResult};
 use std::{
     io::{Read, Write},
-    net::TcpListener,
     str,
 };
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
 
 #[derive(Debug)]
 struct Request<'a> {
@@ -119,27 +120,26 @@ fn request<'a>(input: &'a [u8]) -> IResult<&'a [u8], (Request<'a>, Vec<Header<'a
     terminated(pair(request_line, many1(message_header)), line_ending)(input)
 }
 
-fn main() -> Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:4221")?;
+#[tokio::main]
+async fn main() -> Result<()> {
+    let listener = TcpListener::bind("127.0.0.1:4221").await?;
 
-    for stream in listener.incoming() {
-        match stream {
-            Ok(stream) => {
-                handle_client(stream)?;
-            }
-            Err(e) => {
-                println!("error: {}", e);
-            }
-        }
+    loop {
+        let (stream, _) = listener.accept().await?;
+
+        tokio::spawn(async move {
+            handle_client(stream).await.unwrap();
+        });
     }
-    Ok(())
 }
 
-fn handle_client(mut stream: std::net::TcpStream) -> Result<()> {
+async fn handle_client(mut stream: TcpStream) -> Result<()> {
     let mut buffer = [0u8; 2048];
-    let read = stream.read(&mut buffer)?;
+    let read = stream.read(&mut buffer).await?;
     if read >= buffer.len() {
-        stream.write_all(b"HTTP/1.1 414 URI Too Long\r\n\r\n")?;
+        stream
+            .write_all(b"HTTP/1.1 414 URI Too Long\r\n\r\n")
+            .await?;
         return Ok(());
     }
     let (_, (request, headers)) = request(&buffer[..read]).unwrap();
@@ -150,22 +150,22 @@ fn handle_client(mut stream: std::net::TcpStream) -> Result<()> {
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len}\r\n\r\n{echo}"
         );
-        stream.write_all(response.as_bytes())?;
+        stream.write_all(response.as_bytes()).await?;
     } else if path.starts_with("/user-agent") {
         for header in headers {
             if header.name == b"User-Agent" {
                 let agent = str::from_utf8(&header.value[0][..])?;
                 let len = agent.len();
                 let response = format!( "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {len}\r\n\r\n{agent}");
-                stream.write_all(response.as_bytes())?;
+                stream.write_all(response.as_bytes()).await?;
             }
         }
     } else if path == "/" {
         let response = b"HTTP/1.1 200 OK\r\n\r\n";
-        stream.write_all(response)?;
+        stream.write_all(response).await?;
     } else {
         let response = b"HTTP/1.1 404 Not Found\r\n\r\n";
-        stream.write_all(response)?;
+        stream.write_all(response).await?;
     }
     Ok(())
 }
