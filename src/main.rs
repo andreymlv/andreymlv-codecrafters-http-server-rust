@@ -6,6 +6,7 @@ use nom::multi::many1;
 use nom::sequence::{delimited, pair, preceded, terminated};
 use nom::{bytes::complete::tag, IResult};
 use std::env::args;
+use std::path::Path;
 use std::str;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -148,15 +149,19 @@ async fn handle_client(mut stream: TcpStream, config: Config) -> Result<()> {
         );
             stream.write_all(response.as_bytes()).await?;
         } else if path.starts_with("/files/") {
-            let contents = tokio::fs::read_to_string(
-                config.directory.unwrap() + path.strip_prefix("/files").unwrap(),
-            )
-            .await?;
-            let len = contents.len();
-            let response = format!(
+            let file = config.directory.unwrap() + path.strip_prefix("/files").unwrap();
+            let file_path = Path::new(&file);
+            if file_path.exists() {
+                let contents = tokio::fs::read_to_string(file_path).await?;
+                let len = contents.len();
+                let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {len}\r\n\r\n{contents}"
         );
-            stream.write_all(response.as_bytes()).await?;
+                stream.write_all(response.as_bytes()).await?;
+            } else {
+                let response = b"HTTP/1.1 404 Not Found\r\n\r\n";
+                stream.write_all(response).await?;
+            }
         } else if path.starts_with("/user-agent") {
             for header in headers {
                 if header.name == b"User-Agent" {
