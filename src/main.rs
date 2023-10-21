@@ -142,7 +142,8 @@ async fn handle_client(mut stream: TcpStream) -> Result<()> {
             .await?;
         return Ok(());
     }
-    let (_, (request, headers)) = request(&buffer[..read]).unwrap();
+    let (_, (request, headers)) = request(&buffer[..read])
+        .unwrap_or((&buffer, (request_line(&buffer[..read]).unwrap().1, vec![])));
     let path = str::from_utf8(request.uri)?;
     if path.starts_with("/echo/") {
         let echo = &path[6..];
